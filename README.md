@@ -1,106 +1,331 @@
-# 🇻🇳 Skill Thuế TNCN Vietnam (2026)
+<![CDATA[<div align="center">
 
-> AI Skill tra cứu thuế TNCN, SOP kê khai/quyết toán, hướng dẫn theo nhóm đối tượng.
+# 🇻🇳 TaxAI VietNam
 
-[![Version](https://img.shields.io/badge/version-1.9.0-blue)]()
-[![License](https://img.shields.io/badge/license-MIT-green)]()
-[![Score](https://img.shields.io/badge/audit%20score-9.2%2F10-brightgreen)]()
-[![Updated](https://img.shields.io/badge/updated-05%2F05%2F2026-orange)]()
+### Trợ lý Thuế TNCN Thông Minh — Multi-Agent System
 
-## Tổng Quan
+*Hỏi bằng tiếng Việt, trả lời chính xác, có căn cứ pháp lý*
 
-Skill **thue-tncn-vietnam** là bộ công cụ tra cứu thuế TNCN dạng AI, tự chứa toàn bộ dữ liệu cần thiết. Hoạt động trên Claude Desktop, Google Antigravity, và các nền tảng AI hỗ trợ skill/knowledge base.
+[![Version](https://img.shields.io/badge/version-2.0.0-0078D4?style=for-the-badge)](https://github.com/viduvan/TaxAI-VietNam)
+[![License](https://img.shields.io/badge/license-MIT-2ea44f?style=for-the-badge)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![n8n](https://img.shields.io/badge/n8n-1.116-EA4B71?style=for-the-badge&logo=n8n&logoColor=white)](https://n8n.io)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 
-### Tính năng chính
-
-- 📊 **Biểu thuế 5 bậc 2026** (Luật 109/2025/QH15)
-- 🧮 **7 case study tính thuế** chi tiết (lương, freelancer, KOL, seller, expat)
-- 📋 **SOP quyết toán** qua eTax Mobile (9 bước) + Cổng thuế (5 bước)
-- 🌏 **Thuế người nước ngoài** - cư trú/không cư trú, DTA, flat 20%
-- 🔒 **3 Verification Gates + 8 Anti-Hallucination Rules** chống sai sót
-- ✅ **Calculation Checklist** 8 bước bắt buộc trước khi output phép tính
-- 💰 **BHXH rút 1 lần** - công thức tính, điều kiện 2 nhóm, 4 case study
-- 🛡️ **Trợ cấp thất nghiệp (BHTN)** - công thức 60% lương, thời gian hưởng, quy trình đăng ký
-
-### Nhóm đối tượng
-
-| Nhóm | File hướng dẫn |
-|------|---------------|
-| Người làm công ăn lương | `tong-quan-thue.md` + `sop-quyet-toan.md` |
-| Freelancer / KOL | `freelancer-guide.md` |
-| Người bán hàng online | `freelancer-guide.md` |
-| Người nước ngoài (Expat) | `nguoi-nuoc-ngoai-guide.md` |
-| Nghỉ việc / rút BHXH | `bhxh-rut-mot-lan-guide.md` |
-| Thất nghiệp / BHTN | `bhtn-tro-cap-guide.md` |
-
-## Cài Đặt
-
-### Claude Desktop / Antigravity
-
-```
-your-project/
-└── .agents/
-    └── skill/
-        └── thue-tncn-vietnam/   ← copy vào đây
-```
-
-### Các nền tảng khác
-
-Copy nội dung `SKILL.md` vào system prompt, upload folder `references/` vào knowledge base.
-
-## Số Liệu Nhanh (2026)
-
-| Chỉ số | Giá trị | Căn cứ |
-|--------|---------|--------|
-| Giảm trừ bản thân | 15,5 tr/tháng | NQ 110/2025/UBTVQH15 |
-| Giảm trừ NPT | 6,2 tr/tháng | NQ 110/2025/UBTVQH15 |
-| Ngưỡng miễn thuế HKD | **1 tỷ/năm** (cũ: 500tr) | NĐ 141/2026/NĐ-CP |
-| Biểu thuế lũy tiến | 5 bậc (5% - 35%) | Luật 109/2025/QH15 |
-| Thuế khoán | **Bãi bỏ** từ 01/01/2026 | NQ 198/2025/QH15 |
-
-## Cấu Trúc
-
-```
-thue-tncn-vietnam/
-├── SKILL.md                          ← Master file (AI đọc đầu tiên)
-├── README.md                         ← File này
-├── pending-review/                   ← Văn bản mới chờ duyệt (Semi-Auto Update)
-└── references/
-    ├── tong-quan-thue.md             ← Biểu thuế, giảm trừ, ngưỡng
-    ├── vi-du-tinh-thue.md            ← 7 ví dụ tính thuế
-    ├── sop-quyet-toan.md             ← SOP quyết toán eTax / Cổng thuế
-    ├── freelancer-guide.md           ← Freelancer, KOL, seller
-    ├── nguoi-nuoc-ngoai-guide.md     ← Expat, cư trú, DTA
-    ├── thue-khoan-guide.md           ← Thuế khoán bãi bỏ 2026
-    ├── deadline-tracker.md           ← Lịch nộp thuế 2026
-    ├── faq.md                        ← 13 câu hỏi thường gặp
-    ├── bhxh-rut-mot-lan-guide.md     ← BHXH rút 1 lần: điều kiện, công thức, case study
-    ├── bhtn-tro-cap-guide.md         ← Trợ cấp thất nghiệp: công thức, quy trình
-    ├── system-flow.md                ← Flow diagrams (Mermaid)
-    ├── changelog.md                  ← Lịch sử cập nhật + expiry
-    └── sources.md                    ← Nguồn tham khảo
-```
-
-## Audit Score
-
-Skill đã qua **4 vòng đánh giá** theo quy trình 6 bước:
-
-```
-v1.4.0 (7.4) → v1.5.0 (7.9) → v1.6.0 (8.7) → v1.7.0 (9.2) → v1.8.0 → v1.9.0 (+BHXH/BHTN)
-```
-
-## Lưu Ý Quan Trọng
-
-⚠️ **Thông tin chỉ mang tính tham khảo, KHÔNG thay thế tư vấn thuế chuyên nghiệp.**
-
-Kiểm tra lại tại:
-- https://gdt.gov.vn
-- https://canhan.gdt.gov.vn
-
-## Tác Giả
-
-**Minh Đỗ** | [Liên hệ](https://facebook.com/dotanminh)
+</div>
 
 ---
 
-*Cập nhật: 05/05/2026 | Luật 109/2025/QH15 | NĐ 141/2026/NĐ-CP | NĐ 68/2026/NĐ-CP*
+## 📖 Giới Thiệu
+
+**TaxAI Vietnam** là hệ thống AI multi-agent giúp người dùng tra cứu thuế Thu nhập Cá nhân (TNCN) Việt Nam theo Luật mới **109/2025/QH15** (có hiệu lực từ 01/01/2026). Hệ thống cung cấp:
+
+- 🤖 **Chatbot AI** — hỏi đáp thuế bằng ngôn ngữ tự nhiên
+- 🧮 **Máy tính thuế** — tính thuế tương tác 5 bậc lũy tiến
+- 📅 **Lịch nhắc thuế** — cá nhân hóa theo nhóm đối tượng
+- 🔄 **Cập nhật luật tự động** — crawl văn bản pháp luật mới
+
+> ⚠️ **Disclaimer:** Thông tin chỉ mang tính tham khảo, KHÔNG thay thế tư vấn thuế chuyên nghiệp.
+
+---
+
+## 🏗️ Kiến Trúc Hệ Thống
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        USER (Browser)                          │
+│                      localhost:3000                             │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  IMAGE 1: Web UI                                                │
+│  React 19 + Vite 8 + TypeScript                                 │
+│  Port: 3000                                                     │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ REST API
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  IMAGE 2: Tax Service (FastAPI)                                  │
+│  /api/chat → /api/calculate → /api/calendar → /api/updates      │
+│  Port: 8000                                                      │
+└────────┬─────────────────┬───────────────────┬───────────────────┘
+         │                 │                   │
+         ▼                 ▼                   ▼
+┌────────────────┐ ┌───────────────┐ ┌─────────────────────────────┐
+│  PostgreSQL    │ │  Ollama (LLM) │ │  IMAGE 3: n8n (Queue Mode)  │
+│  + pgvector    │ │  GPU-enabled  │ │  Orchestrator → 4 Agents    │
+│  Port: 5432    │ │  Port: 11434  │ │  Port: 5678                 │
+└────────────────┘ └───────────────┘ │  + Redis (Queue)            │
+                                     │  + n8n-workers (x2)         │
+                                     └─────────────────────────────┘
+```
+
+### 4 AI Agents (n8n Sub-workflows)
+
+| Agent | Chức năng | Workflow |
+|-------|----------|----------|
+| 🔀 **Orchestrator** | Phân loại câu hỏi → route đến agent phù hợp | `orchestrator.json` |
+| 💬 **QA Agent** | RAG search knowledge base → LLM trả lời → Verify | `qa-agent.json` |
+| 🧮 **Calculator Agent** | Parse thu nhập → Tính thuế 5 bậc → Format kết quả | `calculator-agent.json` |
+| 📅 **Calendar Agent** | Tra deadline từ DB → Áp SOP → Format lịch | `calendar-agent.json` |
+| 🕷️ **Law Crawler Agent** | Crawl 4 nguồn luật → Phân tích → Lưu DB | `law-crawler-agent.json` |
+
+---
+
+## 📊 Số Liệu Thuế Nhanh (2026)
+
+| Chỉ số | Giá trị | Căn cứ |
+|--------|---------|--------|
+| Giảm trừ bản thân | **15,5 tr/tháng** (186 tr/năm) | NQ 110/2025/UBTVQH15 |
+| Giảm trừ người phụ thuộc | **6,2 tr/tháng** | NQ 110/2025/UBTVQH15 |
+| Ngưỡng miễn thuế HKD | **1 tỷ/năm** *(cũ: 500tr)* | NĐ 141/2026/NĐ-CP |
+| Biểu thuế lũy tiến | **5 bậc** (5% → 35%) | Luật 109/2025/QH15 |
+| Thuế khoán | **Bãi bỏ** từ 01/01/2026 | NQ 198/2025/QH15 |
+| Lệ phí môn bài | **Bãi bỏ** từ 01/01/2026 | Luật 109/2025/QH15, Đ.35 |
+
+---
+
+## 🚀 Cài Đặt & Chạy
+
+### Yêu cầu
+
+- Docker & Docker Compose v2+
+- GPU (khuyến nghị, cho Ollama LLM)
+- 8GB+ RAM
+
+### 1. Clone & cấu hình
+
+```bash
+git clone https://github.com/viduvan/TaxAI-VietNam.git
+cd TaxAI-VietNam
+
+# Tạo file .env từ template
+cp .env.example .env
+# Sửa các biến: DB password, Redis password, LLM provider...
+```
+
+### 2. Khởi động toàn bộ hệ thống
+
+```bash
+docker compose up -d
+```
+
+Hệ thống sẽ khởi động 7 containers:
+
+| Container | Port | Mô tả |
+|-----------|------|-------|
+| `taxai-web` | 3000 | Web UI (React) |
+| `taxai-service` | 8000 | Backend API (FastAPI) |
+| `taxai-n8n` | 5678 | n8n workflow engine |
+| `taxai-postgres` | 5432 | PostgreSQL + pgvector |
+| `taxai-redis` | — | Redis (n8n queue) |
+| `taxai-ollama` | 11434 | Ollama LLM server |
+| `n8n-worker` (x2) | — | n8n queue workers |
+
+### 3. Import n8n workflows
+
+```bash
+# Mở n8n UI
+open http://localhost:5678
+
+# Settings → Import Workflow → import lần lượt:
+# - orchestrator.json
+# - qa-agent.json
+# - calculator-agent.json
+# - calendar-agent.json
+# - law-crawler-agent.json
+```
+
+### 4. Ingest knowledge base
+
+```bash
+cd scripts
+python ingest_knowledge.py
+```
+
+### 5. Truy cập
+
+- 🌐 **Web UI:** http://localhost:3000
+- 📡 **API Docs:** http://localhost:8000/docs
+- ⚙️ **n8n Dashboard:** http://localhost:5678
+
+---
+
+## 📁 Cấu Trúc Dự Án
+
+```
+TaxAI-VietNam/
+│
+├── backend/                          # FastAPI backend
+│   ├── main.py                       # Entry point
+│   ├── routes/                       # API endpoints
+│   │   ├── chat.py                   #   /api/chat
+│   │   ├── calculator.py             #   /api/calculate
+│   │   ├── calendar.py               #   /api/calendar
+│   │   └── updates.py                #   /api/updates
+│   ├── services/                     # Business logic
+│   │   ├── database.py               #   PostgreSQL connection
+│   │   ├── llm_provider.py           #   Multi-LLM adapter
+│   │   └── n8n_client.py             #   n8n webhook client
+│   ├── requirements.txt
+│   └── Dockerfile
+│
+├── web/                              # React frontend (Vite)
+│   ├── src/
+│   │   ├── App.tsx                   # Main application
+│   │   ├── index.css                 # Design system
+│   │   └── App.css                   # Component styles
+│   ├── package.json
+│   └── Dockerfile
+│
+├── n8n-workflows/                    # n8n exported workflows
+│   ├── orchestrator.json             # Main routing workflow
+│   ├── qa-agent.json                 # Q&A with RAG
+│   ├── calculator-agent.json         # Tax calculator
+│   ├── calendar-agent.json           # Deadline tracker
+│   └── law-crawler-agent.json        # Legal document crawler
+│
+├── references/                       # 📚 Knowledge base (xem mục Bản Quyền)
+│   ├── tong-quan-thue.md             # Biểu thuế 5 bậc, giảm trừ gia cảnh
+│   ├── vi-du-tinh-thue.md            # 7 ví dụ tính thuế
+│   ├── sop-quyet-toan.md             # SOP quyết toán eTax Mobile
+│   ├── freelancer-guide.md           # Freelancer, KOL, seller
+│   ├── nguoi-nuoc-ngoai-guide.md     # Expat, cư trú, DTA
+│   ├── thue-khoan-guide.md           # Thuế khoán bãi bỏ 2026
+│   ├── bhxh-rut-mot-lan-guide.md     # BHXH rút 1 lần
+│   ├── bhtn-tro-cap-guide.md         # Trợ cấp thất nghiệp
+│   ├── deadline-tracker.md           # Lịch nộp thuế 2026
+│   ├── faq.md                        # Câu hỏi thường gặp
+│   ├── system-flow.md                # Flow diagrams
+│   ├── changelog.md                  # Lịch sử cập nhật
+│   └── sources.md                    # Nguồn tham khảo
+│
+├── scripts/
+│   └── ingest_knowledge.py           # Script nạp knowledge vào pgvector
+│
+├── SKILL.md                          # 📚 Master AI prompt (xem mục Bản Quyền)
+├── docker-compose.yml                # 7-container orchestration
+├── init.sql                          # Database schema + seed data
+├── bao-cao-exe-khoi-nghiep.md        # Báo cáo ý tưởng khởi nghiệp (môn EXE)
+└── .env                              # Environment variables (not committed)
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Công nghệ |
+|-------|----------|
+| **Frontend** | React 19, Vite 8, TypeScript 6 |
+| **Backend** | Python 3.11+, FastAPI, Uvicorn, Pydantic |
+| **AI/LLM** | Ollama (local), OpenAI, Anthropic, Groq (multi-provider) |
+| **Orchestration** | n8n 1.116 (Queue Mode), Redis 7.2 |
+| **Database** | PostgreSQL 15 + pgvector 0.6 (RAG embeddings) |
+| **Infra** | Docker Compose, multi-container deployment |
+
+---
+
+## 🔐 Tính Năng An Toàn
+
+Hệ thống được thiết kế với **3 Verification Gates + 8 Anti-Hallucination Rules**:
+
+- 🔒 **Gate 1 — Freshness Check:** Kiểm tra data có còn hiệu lực không
+- 🔒 **Gate 2 — Cross-Verify:** Đối chiếu số liệu giữa các nguồn
+- 🔒 **Gate 3 — Source Citation:** Bắt buộc ghi căn cứ pháp lý mỗi output
+- 🚫 Không bao giờ bịa số liệu thuế
+- 🚫 Không tự suy luận quy định khi chưa có trong knowledge base
+- 📐 Tính thuế bắt buộc tách từng bậc (Calculation Checklist 8 bước)
+
+---
+
+## 👥 Nhóm Đối Tượng Hỗ Trợ
+
+| Nhóm | Mô tả |
+|------|-------|
+| 💼 Người làm công ăn lương | Quyết toán thuế, eTax Mobile, giảm trừ gia cảnh |
+| 🎨 Freelancer / KOL | Ngưỡng doanh thu, kê khai theo quý/năm |
+| 🛒 Người bán hàng online | Shopee, TikTok Shop, Facebook — thuế TMĐT |
+| 🌏 Người nước ngoài (Expat) | Cư trú/không cư trú, DTA, flat 20% |
+| 📋 Nghỉ việc / Rút BHXH | Điều kiện rút 1 lần, 2 nhóm, 4 case study |
+| 🛡️ Thất nghiệp / BHTN | Trợ cấp 60% lương, quy trình đăng ký |
+
+---
+
+## 📜 Bản Quyền & Attribution
+
+### Knowledge Base — Tác giả gốc
+
+> Toàn bộ **knowledge base** (thư mục `references/` và file `SKILL.md`) được clone từ repository gốc
+> [**dotanminh/thue-tncn-vietnam**](https://github.com/dotanminh/thue-tncn-vietnam)
+> của tác giả **Minh Đỗ** ([@dotanminh](https://github.com/dotanminh)).
+>
+> Nội dung này đã qua **4 vòng kiểm toán**, đạt audit score **9.2/10**, bao gồm:
+> - Biểu thuế TNCN 5 bậc 2026, SOP quyết toán, case study tính thuế
+> - Hướng dẫn cho freelancer, KOL, expat, BHXH, BHTN
+> - Anti-Hallucination Rules & Verification Gates
+>
+> **© Minh Đỗ** — Mọi quyền liên quan đến nội dung knowledge base thuộc về tác giả gốc.
+
+#### Các file thuộc bản quyền tác giả gốc (dotanminh)
+
+| File | Mô tả |
+|------|-------|
+| `SKILL.md` | Master AI prompt + workflow 7 bước + 8 Anti-Hallucination Rules |
+| `references/tong-quan-thue.md` | Biểu thuế 5 bậc, giảm trừ gia cảnh |
+| `references/vi-du-tinh-thue.md` | 7 ví dụ tính thuế |
+| `references/sop-quyet-toan.md` | SOP quyết toán eTax Mobile |
+| `references/freelancer-guide.md` | Hướng dẫn Freelancer/KOL/Seller |
+| `references/nguoi-nuoc-ngoai-guide.md` | Thuế người nước ngoài |
+| `references/thue-khoan-guide.md` | Thuế khoán bãi bỏ 2026 |
+| `references/bhxh-rut-mot-lan-guide.md` | BHXH rút 1 lần |
+| `references/bhtn-tro-cap-guide.md` | Trợ cấp thất nghiệp |
+| `references/deadline-tracker.md` | Lịch nộp thuế 2026 |
+| `references/faq.md` | Câu hỏi thường gặp |
+| `references/system-flow.md` | Flow diagrams |
+| `references/changelog.md` | Lịch sử cập nhật |
+| `references/sources.md` | Nguồn tham khảo |
+
+### Multi-Agent System — Phát triển bởi viduvan
+
+Toàn bộ **hạ tầng kỹ thuật multi-agent** được phát triển bởi [**@viduvan**](https://github.com/viduvan), bao gồm:
+
+- `backend/` — FastAPI backend, routes, services, LLM provider adapter
+- `web/` — React 19 frontend (Vite + TypeScript)
+- `n8n-workflows/` — 5 workflow AI agents (orchestrator + 4 sub-agents)
+- `docker-compose.yml` — 7-container orchestration
+- `init.sql` — Database schema (pgvector RAG + deadline + conversations + law updates)
+- `scripts/` — Knowledge ingestion pipeline
+- `bao-cao-exe-khoi-nghiep.md` — Báo cáo ý tưởng khởi nghiệp
+
+---
+
+## 🔗 Liên Kết
+
+| | |
+|---|---|
+| 🏠 **Repository gốc (Knowledge Base)** | [dotanminh/thue-tncn-vietnam](https://github.com/dotanminh/thue-tncn-vietnam) |
+| 👤 **Tác giả Knowledge Base** | [Minh Đỗ (@dotanminh)](https://github.com/dotanminh) |
+| 🛠️ **Fork & Multi-Agent System** | [viduvan/TaxAI-VietNam](https://github.com/viduvan/TaxAI-VietNam) |
+| 📡 **Tổng cục Thuế** | https://gdt.gov.vn |
+| 📱 **Cổng thuế cá nhân** | https://canhan.gdt.gov.vn |
+
+---
+
+## 📄 License
+
+Dự án được phát hành theo giấy phép [MIT License](LICENSE).
+
+Knowledge base content © [Minh Đỗ (@dotanminh)](https://github.com/dotanminh) — xem mục [Bản Quyền & Attribution](#-bản-quyền--attribution).
+
+---
+
+<div align="center">
+
+*Cập nhật: 20/05/2026 | Luật 109/2025/QH15 | NĐ 141/2026/NĐ-CP | NĐ 68/2026/NĐ-CP*
+
+**Developed with ❤️ by [@viduvan](https://github.com/viduvan)**
+
+</div>
+]]>
