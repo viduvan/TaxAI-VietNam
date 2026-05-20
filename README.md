@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🇻🇳 TaxAI VietNam
 
@@ -328,4 +328,3 @@ Knowledge base content © [Minh Đỗ (@dotanminh)](https://github.com/dotanminh
 **Developed with ❤️ by [@viduvan](https://github.com/viduvan)**
 
 </div>
-]]>
