@@ -1,0 +1,158 @@
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════
+  # IMAGE 1: TAX SERVICE (Backend FastAPI)
+  # ═══════════════════════════════════════
+  tax-service:
+    build: ./backend
+    container_name: taxai-service
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./references:/app/references
+      - ./pending-review:/app/pending-review
+      - ./SKILL.md:/app/SKILL.md
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_POSTGRESDB_USER:-taxai}:${DB_POSTGRESDB_PASSWORD:-taxai}@postgres:5432/${TAXAI_DB:-taxai}
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook
+      - OLLAMA_URL=http://ollama:11434
+    networks:
+      - taxai-network
+    depends_on:
+      - postgres
+      - n8n
+      - ollama
+
+  # ═══════════════════════════════════════
+  # IMAGE 2: WEB UI (Frontend)
+  # ═══════════════════════════════════════
+  web-ui:
+    build: ./web
+    container_name: taxai-web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    networks:
+      - taxai-network
+    depends_on:
+      - tax-service
+
+  # ═══════════════════════════════════════
+  # IMAGE 3: N8N (Queue Mode + Workers)
+  # ═══════════════════════════════════════
+  n8n:
+    image: docker.io/n8nio/n8n:1.116.0
+    container_name: taxai-n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./database/n8n_data:/home/node/.n8n
+      - ./references:/data/references
+    env_file:
+      - .env
+    environment:
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB:-n8n}
+      - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER:-taxai}
+      - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD:-taxai}
+      - N8N_AI_ENABLED=true
+    networks:
+      - taxai-network
+    depends_on:
+      - postgres
+      - redis
+
+  n8n-worker:
+    image: docker.io/n8nio/n8n:1.116.0
+    restart: always
+    command: worker
+    volumes:
+      - ./database/n8n_data:/home/node/.n8n
+    env_file:
+      - .env
+    environment:
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB:-n8n}
+      - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER:-taxai}
+      - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD:-taxai}
+      - N8N_CONCURRENCY_PRODUCTION_LIMIT=5
+    networks:
+      - taxai-network
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      replicas: ${N8N_WORKER_REPLICAS:-2}
+
+  # ═══════════════════════════════════════
+  # INFRASTRUCTURE
+  # ═══════════════════════════════════════
+  postgres:
+    image: pgvector/pgvector:0.6.2-pg15
+    container_name: taxai-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    command: postgres -c max_connections=300
+    environment:
+      - POSTGRES_USER=${DB_POSTGRESDB_USER:-taxai}
+      - POSTGRES_PASSWORD=${DB_POSTGRESDB_PASSWORD:-taxai}
+    volumes:
+      - ./database/postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - taxai-network
+
+  redis:
+    image: redis:7.2.4
+    container_name: taxai-redis
+    restart: always
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD}
+      --maxmemory 2048mb --maxmemory-policy allkeys-lru
+    env_file:
+      - .env
+    networks:
+      - taxai-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: taxai-ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - taxai-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+networks:
+  taxai-network:
+    driver: bridge
+
+volumes:
+  ollama_data:
