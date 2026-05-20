@@ -21,12 +21,12 @@
 
 **TaxAI Vietnam** là hệ thống AI multi-agent giúp người dùng tra cứu thuế Thu nhập Cá nhân (TNCN) Việt Nam theo Luật mới **109/2025/QH15** (có hiệu lực từ 01/01/2026). Hệ thống cung cấp:
 
-- 🤖 **Chatbot AI** — hỏi đáp thuế bằng ngôn ngữ tự nhiên
-- 🧮 **Máy tính thuế** — tính thuế tương tác 5 bậc lũy tiến
-- 📅 **Lịch nhắc thuế** — cá nhân hóa theo nhóm đối tượng
-- 🔄 **Cập nhật luật tự động** — crawl văn bản pháp luật mới
+- Chatbot AI — hỏi đáp thuế bằng ngôn ngữ tự nhiên
+- Máy tính thuế — tính thuế tương tác 5 bậc lũy tiến
+- Lịch nhắc thuế — cá nhân hóa theo nhóm đối tượng
+- Cập nhật luật tự động — crawl văn bản pháp luật mới
 
-> ⚠️ **Disclaimer:** Thông tin chỉ mang tính tham khảo, KHÔNG thay thế tư vấn thuế chuyên nghiệp.
+> **Disclaimer:** Thông tin chỉ mang tính tham khảo, KHÔNG thay thế tư vấn thuế chuyên nghiệp.
 
 ---
 
@@ -112,30 +112,10 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Hệ thống sẽ khởi động 7 containers:
-
-| Container | Port | Mô tả |
-|-----------|------|-------|
-| `taxai-web` | 3000 | Web UI (React) |
-| `taxai-service` | 8000 | Backend API (FastAPI) |
-| `taxai-n8n` | 5678 | n8n workflow engine |
-| `taxai-postgres` | 5432 | PostgreSQL + pgvector |
-| `taxai-redis` | — | Redis (n8n queue) |
-| `taxai-ollama` | 11434 | Ollama LLM server |
-| `n8n-worker` (x2) | — | n8n queue workers |
-
 ### 3. Import n8n workflows
 
 ```bash
-# Mở n8n UI
 open http://localhost:5678
-
-# Settings → Import Workflow → import lần lượt:
-# - orchestrator.json
-# - qa-agent.json
-# - calculator-agent.json
-# - calendar-agent.json
-# - law-crawler-agent.json
 ```
 
 ### 4. Ingest knowledge base
@@ -187,7 +167,7 @@ TaxAI-VietNam/
 │   ├── calendar-agent.json           # Deadline tracker
 │   └── law-crawler-agent.json        # Legal document crawler
 │
-├── references/                       # 📚 Knowledge base (xem mục Bản Quyền)
+├── references/                       # 📚 Knowledge base
 │   ├── tong-quan-thue.md             # Biểu thuế 5 bậc, giảm trừ gia cảnh
 │   ├── vi-du-tinh-thue.md            # 7 ví dụ tính thuế
 │   ├── sop-quyet-toan.md             # SOP quyết toán eTax Mobile
@@ -205,10 +185,10 @@ TaxAI-VietNam/
 ├── scripts/
 │   └── ingest_knowledge.py           # Script nạp knowledge vào pgvector
 │
-├── SKILL.md                          # 📚 Master AI prompt (xem mục Bản Quyền)
+├── SKILL.md                          # 📚 Master AI prompt
 ├── docker-compose.yml                # 7-container orchestration
 ├── init.sql                          # Database schema + seed data
-├── bao-cao-exe-khoi-nghiep.md        # Báo cáo ý tưởng khởi nghiệp (môn EXE)
+├── bao-cao-exe-khoi-nghiep.md        # Báo cáo ý tưởng khởi nghiệp
 └── .env                              # Environment variables (not committed)
 ```
 
@@ -255,19 +235,6 @@ Hệ thống được thiết kế với **3 Verification Gates + 8 Anti-Halluci
 
 ## 📜 Bản Quyền & Attribution
 
-### Knowledge Base — Tác giả gốc
-
-> Toàn bộ **knowledge base** (thư mục `references/` và file `SKILL.md`) được clone từ repository gốc
-> [**dotanminh/thue-tncn-vietnam**](https://github.com/dotanminh/thue-tncn-vietnam)
-> của tác giả **Minh Đỗ** ([@dotanminh](https://github.com/dotanminh)).
->
-> Nội dung này đã qua **4 vòng kiểm toán**, đạt audit score **9.2/10**, bao gồm:
-> - Biểu thuế TNCN 5 bậc 2026, SOP quyết toán, case study tính thuế
-> - Hướng dẫn cho freelancer, KOL, expat, BHXH, BHTN
-> - Anti-Hallucination Rules & Verification Gates
->
-> **© Minh Đỗ** — Mọi quyền liên quan đến nội dung knowledge base thuộc về tác giả gốc.
-
 #### Các file thuộc bản quyền tác giả gốc (dotanminh)
 
 | File | Mô tả |
@@ -305,9 +272,7 @@ Toàn bộ **hạ tầng kỹ thuật multi-agent** được phát triển bởi
 
 | | |
 |---|---|
-| 🏠 **Repository gốc (Knowledge Base)** | [dotanminh/thue-tncn-vietnam](https://github.com/dotanminh/thue-tncn-vietnam) |
-| 👤 **Tác giả Knowledge Base** | [Minh Đỗ (@dotanminh)](https://github.com/dotanminh) |
-| 🛠️ **Fork & Multi-Agent System** | [viduvan/TaxAI-VietNam](https://github.com/viduvan/TaxAI-VietNam) |
+| 🛠️ **Multi-Agent System** | [viduvan/TaxAI-VietNam](https://github.com/viduvan/TaxAI-VietNam) |
 | 📡 **Tổng cục Thuế** | https://gdt.gov.vn |
 | 📱 **Cổng thuế cá nhân** | https://canhan.gdt.gov.vn |
 
@@ -316,8 +281,6 @@ Toàn bộ **hạ tầng kỹ thuật multi-agent** được phát triển bởi
 ## 📄 License
 
 Dự án được phát hành theo giấy phép [MIT License](LICENSE).
-
-Knowledge base content © [Minh Đỗ (@dotanminh)](https://github.com/dotanminh) — xem mục [Bản Quyền & Attribution](#-bản-quyền--attribution).
 
 ---
 
