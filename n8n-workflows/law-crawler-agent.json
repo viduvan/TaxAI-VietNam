@@ -1,0 +1,257 @@
+{
+  "name": "TaxAI Law Crawler Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "law-0001",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 400]
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 24 }] }
+      },
+      "id": "law-0000",
+      "name": "Schedule Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.trigger }}", "value2": "manual_upload", "operation": "equals" }
+          ]
+        }
+      },
+      "id": "law-0002",
+      "name": "Is Upload?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://thuvienphapluat.vn/page/tim-van-ban.aspx?keyword=thu%E1%BA%BF+TNCN&area=2&sort=new",
+        "options": { "timeout": 30000 }
+      },
+      "id": "law-0010",
+      "name": "Crawl TVPL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://gdt.gov.vn/wps/portal/home/dn",
+        "options": { "timeout": 30000 }
+      },
+      "id": "law-0011",
+      "name": "Crawl GDT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 240]
+    },
+    {
+      "parameters": {
+        "url": "https://chinhphu.vn/van-ban-phap-luat?linh-vuc=thue",
+        "options": { "timeout": 30000 }
+      },
+      "id": "law-0012",
+      "name": "Crawl ChinhPhu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 380]
+    },
+    {
+      "parameters": {
+        "url": "https://luatvietnam.vn/thue.html",
+        "options": { "timeout": 30000 }
+      },
+      "id": "law-0013",
+      "name": "Crawl LuatVN",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse HTML from 4 sources and extract document links\nconst sources = [\n  { name: 'thuvienphapluat', data: $('Crawl TVPL').first().json },\n  { name: 'gdt', data: $('Crawl GDT').first().json },\n  { name: 'chinhphu', data: $('Crawl ChinhPhu').first().json },\n  { name: 'luatvietnam', data: $('Crawl LuatVN').first().json },\n];\n\nconst documents = [];\nconst seen = new Set();\n\nfor (const src of sources) {\n  const html = typeof src.data === 'string' ? src.data : (src.data.data || '');\n  \n  // Extract document links - regex patterns for Vietnamese legal documents\n  const patterns = [\n    /(?:Nghị định|NĐ)\\s+\\d+\\/\\d+\\/NĐ-CP/gi,\n    /(?:Thông tư|TT)\\s+\\d+\\/\\d+\\/TT-BTC/gi,\n    /(?:Luật)\\s+\\d+\\/\\d+\\/QH\\d+/gi,\n    /(?:Nghị quyết|NQ)\\s+\\d+\\/\\d+/gi,\n    /(?:Công văn|CV)\\s+\\d+\\/\\w+-\\w+/gi,\n  ];\n  \n  for (const pattern of patterns) {\n    const matches = html.match(pattern) || [];\n    for (const match of matches) {\n      const normalized = match.trim();\n      if (!seen.has(normalized) && normalized.match(/thuế|TNCN|BHXH|việc làm/i)) {\n        seen.add(normalized);\n        documents.push({\n          document_name: normalized,\n          source_site: src.name,\n          source_url: '', // Would be extracted from href\n        });\n      }\n    }\n  }\n}\n\nreturn [{ json: { documents, total_found: documents.length } }];"
+      },
+      "id": "law-0020",
+      "name": "Parse & Merge",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT document_name FROM law_updates",
+        "options": {}
+      },
+      "id": "law-0021",
+      "name": "Get Existing",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1160, 300],
+      "credentials": { "postgres": { "id": "taxai-pg", "name": "TaxAI PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const found = $('Parse & Merge').first().json.documents || [];\nconst existing = $input.all().map(i => i.json.document_name);\nconst existingSet = new Set(existing);\n\nconst newDocs = found.filter(d => !existingSet.has(d.document_name));\n\nif (newDocs.length === 0) {\n  return [{ json: { has_new: false, answer: 'Không có văn bản mới liên quan.', agent: 'update' } }];\n}\n\nreturn [{ json: { has_new: true, new_documents: newDocs, count: newDocs.length } }];"
+      },
+      "id": "law-0022",
+      "name": "Filter New",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.has_new }}", "value2": true }
+          ]
+        }
+      },
+      "id": "law-0023",
+      "name": "Has New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1600, 300]
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:14b",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Phân tích văn bản pháp luật mới và xác định tác động đến thuế TNCN/BHXH/BHTN Việt Nam.\n\nTrả về JSON:\n{\"summary\": \"tóm tắt ngắn\", \"impact_level\": \"HIGH|MEDIUM|LOW\", \"affected_files\": [\"tên file.md\"], \"changes\": [{\"field\": \"...\", \"old_value\": \"...\", \"new_value\": \"...\"}], \"patch_suggestions\": [{\"file\": \"...\", \"action\": \"update|add\", \"description\": \"...\"}]}\n\nHIGH: thay đổi thuế suất, ngưỡng, giảm trừ\nMEDIUM: thay đổi thủ tục, mẫu biểu\nLOW: hướng dẫn, giải thích, không thay đổi số liệu"
+            },
+            {
+              "role": "user",
+              "content": "Văn bản mới tìm được:\n{{ JSON.stringify($json.new_documents) }}\n\nDữ liệu hiện tại trong knowledge base đang dùng:\n- Biểu thuế 5 bậc (Luật 109/2025/QH15)\n- Giảm trừ 15.5tr/6.2tr (NQ 110/2025)\n- Ngưỡng 1 tỷ (NĐ 141/2026)\n- BHXH trần 46.8tr, BHTN theo vùng (NĐ 293/2025)"
+            }
+          ]
+        },
+        "options": { "temperature": 0.2 }
+      },
+      "id": "law-0030",
+      "name": "AI Analyze",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [1820, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.text || $input.first().json.message?.content || '{}';\nconst newDocs = $('Filter New').first().json.new_documents || [];\n\nlet analysis;\ntry {\n  const match = raw.match(/\\{[\\s\\S]*\\}/);\n  analysis = match ? JSON.parse(match[0]) : { summary: raw, impact_level: 'LOW' };\n} catch(e) {\n  analysis = { summary: raw, impact_level: 'LOW' };\n}\n\n// Prepare DB inserts\nconst inserts = newDocs.map(doc => ({\n  document_name: doc.document_name,\n  source_url: doc.source_url || '',\n  source_site: doc.source_site || '',\n  summary: analysis.summary,\n  impact_level: analysis.impact_level,\n  changes: JSON.stringify(analysis.changes || []),\n  affected_files: JSON.stringify(analysis.affected_files || []),\n  patch_suggestions: JSON.stringify(analysis.patch_suggestions || []),\n}));\n\nreturn inserts.map(i => ({ json: { ...i, analysis } }));"
+      },
+      "id": "law-0031",
+      "name": "Parse Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2040, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO law_updates (document_name, source_url, source_site, summary, impact_level, changes, affected_files, patch_suggestions)\nVALUES ('{{ $json.document_name }}', '{{ $json.source_url }}', '{{ $json.source_site }}', '{{ $json.summary }}', '{{ $json.impact_level }}', '{{ $json.changes }}'::jsonb, '{{ $json.affected_files }}'::jsonb, '{{ $json.patch_suggestions }}'::jsonb)\nON CONFLICT (document_name) DO NOTHING",
+        "options": {}
+      },
+      "id": "law-0032",
+      "name": "Save to DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2260, 200],
+      "credentials": { "postgres": { "id": "taxai-pg", "name": "TaxAI PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.impact_level }}", "value2": "HIGH", "operation": "equals" }
+          ]
+        }
+      },
+      "id": "law-0033",
+      "name": "Is HIGH Impact?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2480, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO notifications (type, title, body)\nVALUES ('law_update', '🔴 Văn bản mới HIGH IMPACT: {{ $json.document_name }}', '{{ $json.summary }}')",
+        "options": {}
+      },
+      "id": "law-0034",
+      "name": "Create Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2700, 120],
+      "credentials": { "postgres": { "id": "taxai-pg", "name": "TaxAI PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle manual upload\nconst content = $json.content || '';\nconst filename = $json.filename || 'uploaded_doc';\n\nreturn [{ json: { has_new: true, new_documents: [{ document_name: filename, content }], count: 1 } }];"
+      },
+      "id": "law-0040",
+      "name": "Parse Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all();\nconst report = {\n  agent: 'update',\n  total_crawled: results.length,\n  new_found: results.filter(r => r.json.analysis).length,\n  high_impact: results.filter(r => r.json.impact_level === 'HIGH').length,\n  updates: results.map(r => ({ name: r.json.document_name, impact: r.json.impact_level, summary: r.json.summary })),\n  disclaimer: 'Kết quả phân tích tự động, cần human review trước khi áp dụng.'\n};\nreturn [{ json: report }];"
+      },
+      "id": "law-0050",
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2700, 350]
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Is Upload?", "type": "main", "index": 0 }]] },
+    "Schedule Daily": { "main": [[{ "node": "Crawl TVPL", "type": "main", "index": 0 }, { "node": "Crawl GDT", "type": "main", "index": 0 }, { "node": "Crawl ChinhPhu", "type": "main", "index": 0 }, { "node": "Crawl LuatVN", "type": "main", "index": 0 }]] },
+    "Is Upload?": {
+      "main": [
+        [{ "node": "Parse Upload", "type": "main", "index": 0 }],
+        [{ "node": "Crawl TVPL", "type": "main", "index": 0 }, { "node": "Crawl GDT", "type": "main", "index": 0 }, { "node": "Crawl ChinhPhu", "type": "main", "index": 0 }, { "node": "Crawl LuatVN", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Upload": { "main": [[{ "node": "AI Analyze", "type": "main", "index": 0 }]] },
+    "Crawl TVPL": { "main": [[{ "node": "Parse & Merge", "type": "main", "index": 0 }]] },
+    "Crawl GDT": { "main": [[{ "node": "Parse & Merge", "type": "main", "index": 0 }]] },
+    "Crawl ChinhPhu": { "main": [[{ "node": "Parse & Merge", "type": "main", "index": 0 }]] },
+    "Crawl LuatVN": { "main": [[{ "node": "Parse & Merge", "type": "main", "index": 0 }]] },
+    "Parse & Merge": { "main": [[{ "node": "Get Existing", "type": "main", "index": 0 }]] },
+    "Get Existing": { "main": [[{ "node": "Filter New", "type": "main", "index": 0 }]] },
+    "Filter New": { "main": [[{ "node": "Has New?", "type": "main", "index": 0 }]] },
+    "Has New?": {
+      "main": [
+        [{ "node": "AI Analyze", "type": "main", "index": 0 }],
+        [{ "node": "Generate Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Analyze": { "main": [[{ "node": "Parse Analysis", "type": "main", "index": 0 }]] },
+    "Parse Analysis": { "main": [[{ "node": "Save to DB", "type": "main", "index": 0 }]] },
+    "Save to DB": { "main": [[{ "node": "Is HIGH Impact?", "type": "main", "index": 0 }]] },
+    "Is HIGH Impact?": {
+      "main": [
+        [{ "node": "Create Notification", "type": "main", "index": 0 }],
+        [{ "node": "Generate Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Notification": { "main": [[{ "node": "Generate Report", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "TaxAI" }]
+}

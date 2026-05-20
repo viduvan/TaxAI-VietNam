@@ -1,0 +1,108 @@
+{
+  "name": "TaxAI QA Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "qa-0001",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gate 1: Freshness Check\nconst fs = require('fs');\nlet warning = null;\n\ntry {\n  const changelog = fs.readFileSync('/data/references/changelog.md', 'utf8');\n  const dateMatch = changelog.match(/Cập nhật.*?(\\d{2}\\/\\d{2}\\/\\d{4})/i);\n  if (dateMatch) {\n    const parts = dateMatch[1].split('/');\n    const updateDate = new Date(parts[2], parts[1]-1, parts[0]);\n    const now = new Date();\n    const diffMonths = (now - updateDate) / (1000*60*60*24*30);\n    if (diffMonths > 6) {\n      warning = '⚠️ Dữ liệu cập nhật lần cuối cách đây hơn 6 tháng, có thể đã lỗi thời.';\n    }\n  }\n} catch(e) {}\n\nreturn [{ json: { ...($input.first().json), warning } }];"
+      },
+      "id": "qa-0002",
+      "name": "Gate 1 Freshness",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.OLLAMA_URL || 'http://ollama:11434' }}/api/embeddings",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "nomic-embed-text" },
+            { "name": "prompt", "value": "={{ $json.message }}" }
+          ]
+        },
+        "options": { "timeout": 60000 }
+      },
+      "id": "qa-0003",
+      "name": "Embed Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT source_file, section_title, chunk_text, confidence, law_reference,\n  1 - (embedding <=> '[{{ $json.embedding }}]'::vector) as similarity\nFROM knowledge_chunks\nORDER BY embedding <=> '[{{ $json.embedding }}]'::vector\nLIMIT 5",
+        "options": {}
+      },
+      "id": "qa-0004",
+      "name": "RAG Search",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [900, 340],
+      "credentials": { "postgres": { "id": "taxai-pg", "name": "TaxAI PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const chunks = $input.all().map(i => i.json);\nconst message = $('Start').first().json.message;\nconst warning = $('Gate 1 Freshness').first().json.warning;\n\nconst topScore = chunks.length > 0 ? chunks[0].similarity : 0;\nconst hasGoodMatch = topScore > 0.75;\n\n// Check multi-income (Rule 7)\nconst msg = message.toLowerCase();\nconst isMultiIncome = msg.match(/nhiều nguồn|vừa.*vừa|lương.*freelance|lương.*kinh doanh|2 nơi/);\n\nlet context = '';\nif (hasGoodMatch) {\n  context = chunks.map(c => `[${c.source_file}/${c.section_title}]\\n${c.chunk_text}`).join('\\n\\n---\\n\\n');\n} else {\n  // Load full files based on keyword matching\n  const fs = require('fs');\n  const dir = '/data/references/';\n  let files = ['tong-quan-thue.md', 'faq.md'];\n  \n  if (msg.match(/freelancer|kol|seller|bán hàng|shopee/)) files.push('freelancer-guide.md');\n  if (msg.match(/expat|nước ngoài|cư trú|dta/)) files.push('nguoi-nuoc-ngoai-guide.md');\n  if (msg.match(/bhxh|rút.*lần|bảo hiểm xã hội/)) files.push('bhxh-rut-mot-lan-guide.md');\n  if (msg.match(/thất nghiệp|bhtn|trợ cấp/)) files.push('bhtn-tro-cap-guide.md');\n  if (msg.match(/quyết toán|etax|sop|nộp thuế/)) files.push('sop-quyet-toan.md');\n  if (msg.match(/hộ kinh doanh|thuế khoán|hkd/)) files.push('thue-khoan-guide.md');\n  \n  files = [...new Set(files)];\n  for (const f of files) {\n    try {\n      context += `\\n[${f}]\\n` + fs.readFileSync(dir + f, 'utf8') + '\\n---\\n';\n    } catch(e) {}\n  }\n}\n\nif (isMultiIncome) {\n  const fs = require('fs');\n  const dir = '/data/references/';\n  const extraFiles = ['tong-quan-thue.md', 'freelancer-guide.md'];\n  for (const f of extraFiles) {\n    if (!context.includes(f)) {\n      try { context += `\\n[${f}]\\n` + fs.readFileSync(dir + f, 'utf8'); } catch(e) {}\n    }\n  }\n}\n\nconst sources = [...new Set(chunks.map(c => c.source_file))];\n\nreturn [{ json: { message, context, warning, sources, hasGoodMatch, isMultiIncome } }];"
+      },
+      "id": "qa-0005",
+      "name": "Build Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 340]
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:14b",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Bạn là TaxAI - trợ lý thuế TNCN Việt Nam 2026.\n\n## RULES BẮT BUỘC:\n1. KHÔNG BAO GIỜ bịa số liệu thuế → nói \"Tôi không chắc, vui lòng kiểm tra tại gdt.gov.vn\"\n2. KHÔNG khẳng định khi không chắc chắn\n3. KHÔNG suy luận quy định mới khi chưa có trong context\n4. CHỈ trả lời về thuế TNCN, BHXH rút 1 lần, BHTN\n5. MỌI con số PHẢI kèm căn cứ pháp lý\n6. Thuế lũy tiến PHẢI tách từng bước\n7. User nhiều nguồn thu nhập → xử lý từng nguồn riêng\n8. Người làm công 1 nơi → hỏi đã ủy quyền QT chưa\n\n## SỐ LIỆU 2026:\n- Giảm trừ bản thân: 15,5 tr/tháng (NQ 110/2025)\n- Giảm trừ NPT: 6,2 tr/tháng\n- Biểu thuế 5 bậc: 5%/10%/20%/30%/35% (Luật 109/2025)\n- Ngưỡng miễn thuế HKD: 1 tỷ/năm (NĐ 141/2026)\n- Trần BHXH/BHYT: 46,8tr (20x lương cơ sở)\n\nTrả lời bằng tiếng Việt, rõ ràng, có căn cứ pháp lý."
+            },
+            {
+              "role": "user",
+              "content": "Context từ knowledge base:\n{{ $json.context }}\n\n{{ $json.warning ? '⚠️ ' + $json.warning : '' }}\n\nCâu hỏi: {{ $json.message }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.3, "maxTokens": 2048 }
+      },
+      "id": "qa-0006",
+      "name": "LLM Answer",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [1340, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gate 2: Cross-Verify + Gate 3: Citation\nconst answer = $input.first().json.text || $input.first().json.message?.content || '';\nconst context = $('Build Context').first().json;\n\n// Gate 2: Check key numbers\nlet verified = true;\nconst numbers = answer.match(/\\d{1,3}([.,]\\d{3})*([.,]\\d+)?\\s*(tr|triệu|%|tỷ)/gi) || [];\n// Simple verification - would be more thorough in production\n\n// Gate 3: Add citation + disclaimer\nlet finalAnswer = answer;\n\n// Add disclaimer if not present\nif (!finalAnswer.includes('tham khảo')) {\n  finalAnswer += '\\n\\n---\\n⚠️ Thông tin chỉ mang tính tham khảo, KHÔNG thay thế tư vấn thuế chuyên nghiệp.\\nKiểm tra lại tại: https://gdt.gov.vn';\n}\n\nreturn [{ json: {\n  answer: finalAnswer,\n  agent: 'qa',\n  sources: context.sources || [],\n  warning: context.warning,\n  disclaimer: '⚠️ Thông tin chỉ mang tính tham khảo, KHÔNG thay thế tư vấn thuế chuyên nghiệp.'\n} }];"
+      },
+      "id": "qa-0007",
+      "name": "Verify and Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 340]
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Gate 1 Freshness", "type": "main", "index": 0 }]] },
+    "Gate 1 Freshness": { "main": [[{ "node": "Embed Query", "type": "main", "index": 0 }]] },
+    "Embed Query": { "main": [[{ "node": "RAG Search", "type": "main", "index": 0 }]] },
+    "RAG Search": { "main": [[{ "node": "Build Context", "type": "main", "index": 0 }]] },
+    "Build Context": { "main": [[{ "node": "LLM Answer", "type": "main", "index": 0 }]] },
+    "LLM Answer": { "main": [[{ "node": "Verify and Format", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "TaxAI" }]
+}

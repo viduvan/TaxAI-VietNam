@@ -1,0 +1,255 @@
+{
+  "name": "TaxAI Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taxai-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 340],
+      "webhookId": "taxai-chat"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst message = body.message || '';\nconst sessionId = body.session_id || '';\n\nif (!message || message.trim() === '') {\n  return [{ json: { error: true, message: 'Vui lòng nhập câu hỏi' } }];\n}\n\nif (message.length > 5000) {\n  return [{ json: { error: true, message: 'Câu hỏi quá dài, vui lòng rút gọn' } }];\n}\n\nreturn [{ json: { message: message.trim(), session_id: sessionId, valid: true } }];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:14b",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Bạn là bộ phân loại câu hỏi thuế. Phân loại câu hỏi vào 1 trong 4 loại:\n- calculate: câu hỏi yêu cầu tính thuế, tính tiền, bao nhiêu tiền thuế, BHXH\n- calendar: câu hỏi về deadline, hạn nộp, quyết toán khi nào, SOP nộp thuế\n- update: câu hỏi về luật mới, thay đổi, cập nhật, văn bản mới\n- qa: tất cả câu hỏi khác (giải thích, hỏi đáp chung)\n\nTrả về JSON duy nhất: {\"intent\": \"...\", \"confidence\": 0.0-1.0}\nKhông giải thích thêm."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Classify Intent",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [900, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $('Validate Input').first().json.message;\nconst raw = $input.first().json.text || $input.first().json.message?.content || '{}';\n\nlet intent = 'qa';\nlet confidence = 0.5;\n\ntry {\n  const match = raw.match(/\\{[^}]+\\}/);\n  if (match) {\n    const parsed = JSON.parse(match[0]);\n    intent = parsed.intent || 'qa';\n    confidence = parsed.confidence || 0.5;\n  }\n} catch(e) {\n  intent = 'qa';\n}\n\n// Fallback keyword matching\nconst msg = message.toLowerCase();\nif (confidence < 0.7) {\n  if (msg.match(/tính|bao nhiêu tiền|lương.*thuế|thuế.*tháng|bhxh.*rút/)) {\n    intent = 'calculate'; confidence = 0.8;\n  } else if (msg.match(/deadline|hạn nộp|quyết toán.*khi|sop|bước.*nộp|etax/)) {\n    intent = 'calendar'; confidence = 0.8;\n  } else if (msg.match(/luật mới|thay đổi|cập nhật|văn bản mới|nghị định mới/)) {\n    intent = 'update'; confidence = 0.8;\n  }\n}\n\nreturn [{ json: { intent, confidence, message, session_id: $('Validate Input').first().json.session_id } }];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000005",
+      "name": "Parse Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 240]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "calculate",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.intent }}", "rightValue": "calculate", "operator": { "type": "string", "operation": "equals" } },
+                  { "leftValue": "={{ $json.confidence }}", "rightValue": 0.7, "operator": { "type": "number", "operation": "gte" } }
+                ]
+              }
+            },
+            {
+              "outputKey": "calendar",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.intent }}", "rightValue": "calendar", "operator": { "type": "string", "operation": "equals" } },
+                  { "leftValue": "={{ $json.confidence }}", "rightValue": 0.7, "operator": { "type": "number", "operation": "gte" } }
+                ]
+              }
+            },
+            {
+              "outputKey": "update",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.intent }}", "rightValue": "update", "operator": { "type": "string", "operation": "equals" } },
+                  { "leftValue": "={{ $json.confidence }}", "rightValue": 0.7, "operator": { "type": "number", "operation": "gte" } }
+                ]
+              }
+            }
+          ],
+          "fallbackOutput": "qa"
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000006",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1340, 240]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.QA_AGENT_WORKFLOW_ID }}",
+        "options": {},
+        "workflowInputs": {
+          "values": [
+            { "name": "message", "value": "={{ $json.message }}" },
+            { "name": "session_id", "value": "={{ $json.session_id }}" }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000010",
+      "name": "QA Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1600, 440]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.CALCULATOR_WORKFLOW_ID }}",
+        "options": {},
+        "workflowInputs": {
+          "values": [
+            { "name": "message", "value": "={{ $json.message }}" },
+            { "name": "session_id", "value": "={{ $json.session_id }}" }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000007",
+      "name": "Calculator Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1600, 140]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.CALENDAR_WORKFLOW_ID }}",
+        "options": {},
+        "workflowInputs": {
+          "values": [
+            { "name": "message", "value": "={{ $json.message }}" },
+            { "name": "session_id", "value": "={{ $json.session_id }}" }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000008",
+      "name": "Calendar Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1600, 280]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.UPDATE_WORKFLOW_ID }}",
+        "options": {},
+        "workflowInputs": {
+          "values": [
+            { "name": "message", "value": "={{ $json.message }}" },
+            { "name": "session_id", "value": "={{ $json.session_id }}" }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000009",
+      "name": "Update Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1600, 580]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nresult.agent = result.agent || $('Route by Intent').first().json.intent || 'qa';\nreturn [{ json: result }];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000011",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1840, 340]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        },
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000012",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2060, 340]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 400
+        },
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000013",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 460]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validate Input", "type": "main", "index": 0 }]] },
+    "Validate Input": { "main": [[{ "node": "Is Valid?", "type": "main", "index": 0 }]] },
+    "Is Valid?": {
+      "main": [
+        [{ "node": "Classify Intent", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Classify Intent": { "main": [[{ "node": "Parse Intent", "type": "main", "index": 0 }]] },
+    "Parse Intent": { "main": [[{ "node": "Route by Intent", "type": "main", "index": 0 }]] },
+    "Route by Intent": {
+      "main": [
+        [{ "node": "Calculator Agent", "type": "main", "index": 0 }],
+        [{ "node": "Calendar Agent", "type": "main", "index": 0 }],
+        [{ "node": "Update Agent", "type": "main", "index": 0 }],
+        [{ "node": "QA Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "QA Agent": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] },
+    "Calculator Agent": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] },
+    "Calendar Agent": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] },
+    "Update Agent": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] },
+    "Merge Results": { "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "TaxAI" }]
+}

@@ -1,0 +1,107 @@
+{
+  "name": "TaxAI Calendar Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "cal-0001",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.action }}", "value2": "deadlines", "operation": "equals" }
+          ]
+        }
+      },
+      "id": "cal-0002",
+      "name": "Action Type?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, deadline_date, description, user_type, quarter, status,\n  deadline_date - CURRENT_DATE as days_left\nFROM tax_deadlines\nWHERE deadline_date >= CURRENT_DATE\n  {{ $json.user_type ? \"AND user_type = '\" + $json.user_type + \"'\" : '' }}\nORDER BY deadline_date ASC\nLIMIT 20",
+        "options": {}
+      },
+      "id": "cal-0003",
+      "name": "Query Deadlines",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [680, 240],
+      "credentials": { "postgres": { "id": "taxai-pg", "name": "TaxAI PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const deadlines = $input.all().map(i => {\n  const d = i.json;\n  const daysLeft = parseInt(d.days_left);\n  let urgency;\n  if (daysLeft <= 7) urgency = '🔴 KHẨN CẤP';\n  else if (daysLeft <= 30) urgency = '🟡 SẮP ĐẾN';\n  else urgency = '🟢 CÒN LÂU';\n  \n  return {\n    ...d,\n    days_left: daysLeft,\n    urgency,\n    deadline_formatted: new Date(d.deadline_date).toLocaleDateString('vi-VN'),\n  };\n});\n\nreturn [{ json: {\n  agent: 'calendar',\n  deadlines,\n  total: deadlines.length,\n  next_deadline: deadlines[0] || null,\n  disclaimer: 'Hạn nộp nếu trùng ngày nghỉ/lễ → chuyển sang ngày làm việc tiếp theo.'\n} }];"
+      },
+      "id": "cal-0004",
+      "name": "Format Deadlines",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle free-form question about calendar/SOP\nconst message = $json.message || '';\nconst msg = message.toLowerCase();\nconst fs = require('fs');\n\nlet sopContent = '';\nlet platform = 'both';\n\nif (msg.match(/etax|mobile/)) platform = 'etax';\nelse if (msg.match(/cổng thuế|canhan\\.gdt/)) platform = 'portal';\n\ntry {\n  sopContent = fs.readFileSync('/data/references/sop-quyet-toan.md', 'utf8');\n} catch(e) { sopContent = 'Không thể đọc file SOP.'; }\n\nlet checklist = '';\ntry {\n  const dl = fs.readFileSync('/data/references/deadline-tracker.md', 'utf8');\n  checklist = dl;\n} catch(e) {}\n\nreturn [{ json: { message, platform, sopContent, checklist, user_type: $json.user_type } }];"
+      },
+      "id": "cal-0005",
+      "name": "Load SOP Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 460]
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:14b",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Bạn là trợ lý lịch thuế. Trả lời câu hỏi về deadline, SOP quyết toán, hồ sơ cần chuẩn bị dựa trên context sau. Luôn trả lời bằng tiếng Việt, rõ ràng."
+            },
+            {
+              "role": "user",
+              "content": "SOP Data:\n{{ $json.sopContent }}\n\nDeadline Data:\n{{ $json.checklist }}\n\nCâu hỏi: {{ $json.message }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.3, "maxTokens": 1500 }
+      },
+      "id": "cal-0006",
+      "name": "LLM Answer SOP",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [900, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const answer = $input.first().json.text || $input.first().json.message?.content || '';\nreturn [{ json: {\n  agent: 'calendar',\n  answer,\n  sources: ['sop-quyet-toan.md', 'deadline-tracker.md'],\n  disclaimer: '⚠️ Kiểm tra lại tại canhan.gdt.gov.vn'\n} }];"
+      },
+      "id": "cal-0007",
+      "name": "Format SOP Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 460]
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Action Type?", "type": "main", "index": 0 }]] },
+    "Action Type?": {
+      "main": [
+        [{ "node": "Query Deadlines", "type": "main", "index": 0 }],
+        [{ "node": "Load SOP Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Query Deadlines": { "main": [[{ "node": "Format Deadlines", "type": "main", "index": 0 }]] },
+    "Load SOP Data": { "main": [[{ "node": "LLM Answer SOP", "type": "main", "index": 0 }]] },
+    "LLM Answer SOP": { "main": [[{ "node": "Format SOP Answer", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "TaxAI" }]
+}

@@ -1,0 +1,102 @@
+{
+  "name": "TaxAI Calculator Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "calc-0001",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 340]
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:14b",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Trích xuất thông tin tính thuế từ câu hỏi. Trả về JSON duy nhất:\n{\"gross_salary\": number|null, \"num_dependents\": number, \"region\": \"I\"|\"II\"|\"III\"|\"IV\", \"income_type\": \"salary\"|\"business\"|\"mixed\", \"revenue\": number|null, \"business_sector\": string|null}\n\nMặc định: region=\"I\", num_dependents=0, income_type=\"salary\".\nKhông giải thích."
+            },
+            { "role": "user", "content": "={{ $json.message }}" }
+          ]
+        },
+        "options": { "temperature": 0.1 }
+      },
+      "id": "calc-0002",
+      "name": "Parse Input",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.text || $input.first().json.message?.content || '{}';\nlet params;\ntry {\n  const match = raw.match(/\\{[\\s\\S]*\\}/);\n  params = match ? JSON.parse(match[0]) : {};\n} catch(e) { params = {}; }\n\n// Also accept direct params from API\nconst input = $('Start').first().json;\nparams.gross_salary = params.gross_salary || input.gross_salary || null;\nparams.num_dependents = params.num_dependents ?? input.num_dependents ?? 0;\nparams.region = params.region || input.region || 'I';\nparams.income_type = params.income_type || input.income_type || 'salary';\nparams.revenue = params.revenue || input.revenue || null;\nparams.message = input.message;\n\nreturn [{ json: params }];"
+      },
+      "id": "calc-0003",
+      "name": "Normalize Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.income_type }}", "value2": "salary", "operation": "equals" }
+          ]
+        }
+      },
+      "id": "calc-0004",
+      "name": "Is Salary?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json;\nconst salary = p.gross_salary;\nconst npt = p.num_dependents || 0;\nconst region = p.region || 'I';\n\nif (!salary || salary <= 0) {\n  return [{ json: { error: true, answer: 'Vui lòng cho biết mức lương gross/tháng để tính thuế.', agent: 'calculator' } }];\n}\n\n// Constants 2026\nconst BHXH_CEIL = 46800000;\nconst BHTN_CEIL = { I: 106200000, II: 94600000, III: 82800000, IV: 74000000 };\nconst PERSONAL = 15500000;\nconst DEPENDENT = 6200000;\nconst BRACKETS = [\n  { limit: 10000000, rate: 0.05, name: 'Bậc 1' },\n  { limit: 30000000, rate: 0.10, name: 'Bậc 2' },\n  { limit: 60000000, rate: 0.20, name: 'Bậc 3' },\n  { limit: 100000000, rate: 0.30, name: 'Bậc 4' },\n  { limit: Infinity, rate: 0.35, name: 'Bậc 5' },\n];\n\nconst steps = [];\n\n// Step 1: Thu nhập chịu thuế\nsteps.push({ step: 1, label: 'Thu nhập chịu thuế', value: salary, formula: `${(salary/1000000).toFixed(1)} triệu/tháng` });\n\n// Step 2: BHBB\nconst bhxh = Math.min(salary, BHXH_CEIL) * 0.08;\nconst bhyt = Math.min(salary, BHXH_CEIL) * 0.015;\nconst bhtnCeil = BHTN_CEIL[region] || BHTN_CEIL['I'];\nconst bhtn = Math.min(salary, bhtnCeil) * 0.01;\nconst totalBH = bhxh + bhyt + bhtn;\n\nsteps.push({ step: 2, label: 'BHXH (8%)', value: -bhxh, formula: `min(${(salary/1e6).toFixed(1)}tr, ${BHXH_CEIL/1e6}tr) × 8%`, note: salary > BHXH_CEIL ? `Vượt trần BHXH ${BHXH_CEIL/1e6}tr` : null });\nsteps.push({ step: 2, label: 'BHYT (1.5%)', value: -bhyt, formula: `min(${(salary/1e6).toFixed(1)}tr, ${BHXH_CEIL/1e6}tr) × 1.5%` });\nsteps.push({ step: 2, label: `BHTN (1%) - Vùng ${region}`, value: -bhtn, formula: `min(${(salary/1e6).toFixed(1)}tr, ${bhtnCeil/1e6}tr) × 1%` });\nsteps.push({ step: 2, label: 'Tổng BHBB', value: -totalBH, formula: `${(totalBH).toLocaleString('vi-VN')} VNĐ` });\n\n// Step 3-4: Giảm trừ\nsteps.push({ step: 3, label: 'Giảm trừ bản thân', value: -PERSONAL, formula: '15.500.000/tháng (NQ 110/2025)' });\nconst nptDeduction = npt * DEPENDENT;\nsteps.push({ step: 4, label: `Giảm trừ NPT (${npt} người)`, value: -nptDeduction, formula: `${npt} × 6.200.000` });\n\n// Step 5: TNTT\nconst tntt = Math.max(0, salary - totalBH - PERSONAL - nptDeduction);\nsteps.push({ step: 5, label: 'Thu nhập tính thuế', value: tntt, formula: `${(salary/1e6).toFixed(1)}tr - ${(totalBH/1e6).toFixed(2)}tr - ${PERSONAL/1e6}tr - ${(nptDeduction/1e6).toFixed(1)}tr` });\n\n// Step 6-7: Tính thuế\nlet totalTax = 0;\nlet remaining = tntt;\nlet prevLimit = 0;\nconst taxBreakdown = [];\n\nif (tntt <= 0) {\n  steps.push({ step: 6, label: 'Thuế TNCN', value: 0, formula: 'TNTT ≤ 0 → Không phải nộp thuế' });\n} else {\n  for (const bracket of BRACKETS) {\n    if (remaining <= 0) break;\n    const taxable = Math.min(remaining, bracket.limit - prevLimit);\n    const tax = taxable * bracket.rate;\n    totalTax += tax;\n    remaining -= taxable;\n    taxBreakdown.push({ bracket: bracket.name, range: `${(prevLimit/1e6).toFixed(0)}-${bracket.limit === Infinity ? '∞' : (bracket.limit/1e6).toFixed(0)}tr`, rate: `${bracket.rate*100}%`, taxable, tax });\n    steps.push({ step: 6, label: `${bracket.name}: ${(taxable).toLocaleString('vi-VN')} × ${bracket.rate*100}%`, value: tax, formula: `${(tax).toLocaleString('vi-VN')} VNĐ` });\n    prevLimit = bracket.limit;\n  }\n  steps.push({ step: 7, label: 'Tổng thuế TNCN/tháng', value: totalTax, formula: `${(totalTax).toLocaleString('vi-VN')} VNĐ` });\n}\n\nconst effectiveRate = salary > 0 ? (totalTax / salary * 100) : 0;\n\n// Step 8\nsteps.push({ step: 8, label: 'Khuyên đối soát', value: null, formula: 'Đối soát lại bằng Excel hoặc eTax Mobile' });\n\n// Compare 2025\nconst BRACKETS_2025 = [\n  { limit: 5000000, rate: 0.05 }, { limit: 10000000, rate: 0.10 },\n  { limit: 18000000, rate: 0.15 }, { limit: 32000000, rate: 0.20 },\n  { limit: 52000000, rate: 0.25 }, { limit: 80000000, rate: 0.30 },\n  { limit: Infinity, rate: 0.35 },\n];\nconst tntt2025 = Math.max(0, salary - totalBH - 11000000 - npt * 4400000);\nlet tax2025 = 0; let rem2025 = tntt2025; let prev2025 = 0;\nfor (const b of BRACKETS_2025) {\n  if (rem2025 <= 0) break;\n  const t = Math.min(rem2025, b.limit - prev2025);\n  tax2025 += t * b.rate;\n  rem2025 -= t;\n  prev2025 = b.limit;\n}\n\nreturn [{ json: {\n  agent: 'calculator',\n  calculation_steps: steps,\n  tax_breakdown: taxBreakdown,\n  total_tax: totalTax,\n  total_tax_year: totalTax * 12,\n  effective_rate: Math.round(effectiveRate * 100) / 100,\n  net_salary: salary - totalBH - totalTax,\n  comparison_2025: { tax_2025: Math.round(tax2025), tax_2026: Math.round(totalTax), saved: Math.round(tax2025 - totalTax), saved_year: Math.round((tax2025 - totalTax) * 12) },\n  params: { salary, npt, region },\n  disclaimer: '⚠️ Kết quả tham khảo. Căn cứ: Luật 109/2025/QH15, NQ 110/2025. Đối soát lại bằng Excel hoặc eTax.'\n} }];"
+      },
+      "id": "calc-0005",
+      "name": "Calculate Salary Tax",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json;\nconst revenue = p.revenue;\nconst sector = p.business_sector || 'other';\n\nif (!revenue || revenue <= 0) {\n  return [{ json: { error: true, answer: 'Vui lòng cho biết doanh thu/năm để tính thuế.', agent: 'calculator' } }];\n}\n\nconst RATES = {\n  'goods': { gtgt: 0.01, tncn: 0.005, label: 'Phân phối hàng hóa' },\n  'manufacturing': { gtgt: 0.03, tncn: 0.015, label: 'Sản xuất, vận tải' },\n  'service': { gtgt: 0.05, tncn: 0.02, label: 'Dịch vụ' },\n  'digital': { gtgt: 0.05, tncn: 0.05, label: 'Nội dung số' },\n  'rental': { gtgt: 0.05, tncn: 0.05, label: 'Cho thuê tài sản' },\n  'other': { gtgt: 0.01, tncn: 0.01, label: 'Khác' },\n};\nconst rate = RATES[sector] || RATES['other'];\n\nlet result;\nif (revenue <= 1000000000) {\n  result = { answer: `Doanh thu ${(revenue/1e6).toFixed(0)} triệu/năm ≤ 1 tỷ → **MIỄN THUẾ** hoàn toàn (NĐ 141/2026/NĐ-CP).\\nChỉ cần kê khai doanh thu 1 lần/năm (trước 31/01 năm sau).`, total_tax: 0, agent: 'calculator' };\n} else if (revenue <= 3000000000) {\n  const gtgt = revenue * rate.gtgt;\n  const tncn = revenue * rate.tncn;\n  result = { answer: `DT ${(revenue/1e9).toFixed(1)} tỷ (ngành: ${rate.label}):\\n- Thuế GTGT: ${(gtgt).toLocaleString('vi-VN')} (${rate.gtgt*100}%)\\n- Thuế TNCN: ${(tncn).toLocaleString('vi-VN')} (${rate.tncn*100}%)\\n- **Tổng: ${(gtgt+tncn).toLocaleString('vi-VN')} VNĐ/năm**`, total_tax: gtgt+tncn, agent: 'calculator' };\n} else {\n  const taxRate = revenue > 50000000000 ? 0.20 : 0.17;\n  result = { answer: `DT ${(revenue/1e9).toFixed(1)} tỷ → Tính thuế theo lợi nhuận (DT-CP) × ${taxRate*100}%.\\nCần có sổ sách kế toán đầy đủ. Khuyến nghị tham vấn kế toán chuyên nghiệp.`, total_tax: null, agent: 'calculator' };\n}\n\nresult.disclaimer = '⚠️ Căn cứ: NĐ 141/2026, NĐ 68/2026. Kiểm tra tại gdt.gov.vn';\nreturn [{ json: result }];"
+      },
+      "id": "calc-0006",
+      "name": "Calculate Business Tax",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format final output with AI\nconst result = $input.first().json;\nif (result.error) return [{ json: result }];\nreturn [{ json: result }];"
+      },
+      "id": "calc-0007",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 340]
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Parse Input", "type": "main", "index": 0 }]] },
+    "Parse Input": { "main": [[{ "node": "Normalize Params", "type": "main", "index": 0 }]] },
+    "Normalize Params": { "main": [[{ "node": "Is Salary?", "type": "main", "index": 0 }]] },
+    "Is Salary?": {
+      "main": [
+        [{ "node": "Calculate Salary Tax", "type": "main", "index": 0 }],
+        [{ "node": "Calculate Business Tax", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Salary Tax": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] },
+    "Calculate Business Tax": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "TaxAI" }]
+}
