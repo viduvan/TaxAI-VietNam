@@ -1,11 +1,23 @@
-# Output files (generated books, PDFs)
+# Output files
 output/
 
-# Web deployment (has its own repo)
-web/
+# Docker volumes
+database/
+ollama_data/
 
-# Node modules
+# Environment (secrets)
+.env
+
+# Node
 node_modules/
+web/.next/
+web/node_modules/
+
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+*.egg-info/
 
 # Temp files
 ~$*
